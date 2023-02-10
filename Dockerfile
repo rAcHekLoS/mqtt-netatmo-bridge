@@ -1,4 +1,4 @@
-FROM node:lts-alpine
+FROM arm64v8/node:lts-alpine
 RUN apk add --no-cache git tzdata ; mkdir -p /usr/node_app
 
 COPY . /usr/node_app

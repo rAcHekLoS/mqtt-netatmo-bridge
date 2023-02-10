@@ -1,4 +1,5 @@
 // Requirements
+//require('dotenv').config();
 const mqtt = require('mqtt')
 const netatmo = require('netatmo')
 const interval = require('interval-promise')
@@ -205,18 +206,23 @@ api.on('get-eventsuntil', handleEvents)
 const processModule = function(module) {
     const name = module.module_name
     const data = module.dashboard_data
-    logging.info('Looking at module: ' + name)
-    logging.info('   data: ' + JSON.stringify(data))
     health.healthyEvent()
-
-    const batteryPercent = module.battery_percent
-    if (!_.isNil(batteryPercent)) {
-        const batteryTopic = mqtt_helpers.generateTopic(topicPrefix, name, 'battery')
-        client.smartPublish(batteryTopic, batteryPercent, { retain: true })
+    
+    if (module.battery_percent != undefined) {
+        data.battery = module.battery_percent
     }
 
+    logging.info('Looking at module: ' + name)
+    logging.info('   data: ' + JSON.stringify(data))
+    
+    mqttdata = new Object()
+    if (data?.time_utc != undefined) {
+        mqttdata.Time = new Date(data.time_utc * 1000)
+    }
+    mqttdata.SENSOR = data
+
     logging.info('starting smart publish')
-    client.smartPublishCollection(mqtt_helpers.generateTopic(topicPrefix, name), data, [], { retain: true })
+    client.smartPublish(mqtt_helpers.generateTopic(topicPrefix, name + '/SENSOR'), JSON.stringify(mqttdata), [], { retain: true })
     logging.info('done')
 }
 
@@ -237,11 +243,11 @@ const startMonitoring = function() {
     pollData()
     interval(async() => {
         pollData()
-    }, 30 * 1000)
+    }, 120 * 1000)
 
-    interval(async() => {
+    /*interval(async() => {
         refreshToken()
-    }, 25 * 1000)
+    }, 25 * 1000)*/
 }
 
 startMonitoring()
