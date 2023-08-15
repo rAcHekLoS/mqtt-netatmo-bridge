@@ -14,7 +14,7 @@
         "homeautomation-js-lib": "https://github.com/terafin/homeautomation-js-lib.git",
         "lodash": "latest",
         "mqtt": "latest",
-        "netatmo": "latest",
+        "netatmo": "https://github.com/arenddeboer/netatmo.git",
         "interval-promise": "latest"
     },
     "engines": {
