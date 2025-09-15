@@ -12,6 +12,7 @@ LICENSE
 node_modules
 .vscode
 .travis.yml
+auth_file.json
 
 # ignore all markdown files (md) beside all README*.md other than README-secret.md
 *.md

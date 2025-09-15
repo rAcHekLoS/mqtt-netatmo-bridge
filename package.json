@@ -1,6 +1,6 @@
 {
     "name": "mqtt-netatmo-bridge",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "description": "Bridge netatmo to and from MQTT",
     "license": "MIT",
     "main": "mqtt-netatmo-bridge.js",
@@ -14,8 +14,9 @@
         "homeautomation-js-lib": "https://github.com/terafin/homeautomation-js-lib.git",
         "lodash": "latest",
         "mqtt": "latest",
-        "netatmo": "latest",
-        "interval-promise": "latest"
+        "netatmo": "https://github.com/tomporter518/netatmo.git",
+        "interval-promise": "latest",
+        "dotenv": "latest"
     },
     "engines": {
         "node": ">=4"

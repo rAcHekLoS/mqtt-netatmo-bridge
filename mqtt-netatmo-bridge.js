@@ -1,22 +1,28 @@
 // Requirements
+require('dotenv').config()
 const mqtt = require('mqtt')
 const netatmo = require('netatmo')
 const interval = require('interval-promise')
 const _ = require('lodash')
 const logging = require('homeautomation-js-lib/logging.js')
 const mqtt_helpers = require('homeautomation-js-lib/mqtt_helpers.js')
-
 const health = require('homeautomation-js-lib/health.js')
+const { writeFile, existsSync, readFile } = require('fs');
 
-
-// Config
-const webhook_url = process.env.WEBHOOK_URL
-const webhook_port = process.env.WEBHOOK_PORT
-const netatmo_user = process.env.NETATMO_USER
-const netatmo_pass = process.env.NETATMO_PASS
+// Initial variables
+const topicPrefix = process.env.TOPIC_PREFIX
 const netatmo_client_id = process.env.NETATMO_CLIENT_ID
 const netatmo_client_secret = process.env.NETATMO_CLIENT_SECRET
-const topicPrefix = process.env.TOPIC_PREFIX
+const netatmo_refresh_token = process.env.NETATMO_REFRESH_TOKEN
+const topic_as_json = process.env.TOPIC_AS_JSON
+const auth_file = 'config/auth_file.json'
+var api = null
+var env_auth_data = {
+    'client_id': netatmo_client_id,
+    'client_secret': netatmo_client_secret,
+    'refresh_token': netatmo_refresh_token,
+    'inital_refresh_token': netatmo_refresh_token
+}
 
 // Setup MQTT
 const client = mqtt_helpers.setupClient(null, null)
@@ -66,21 +72,51 @@ const isInterestingDataPoint = function(inName) {
     return null
 }
 
-var auth = {
-    'client_id': netatmo_client_id,
-    'client_secret': netatmo_client_secret,
-    'username': netatmo_user,
-    'password': netatmo_pass,
+const writeAuthFile = function()
+{
+    writeFile(auth_file, JSON.stringify(env_auth_data), (err) => {
+        if (err) {
+            logging.error("Netatmo auth file error: " + err);
+            exit
+        }
+        logging.info("Generated new auth file");
+    })  
 }
 
-var api = null
-
+const initalAuth = function() {
+    if (existsSync(auth_file)) {
+        logging.info("Auth file exists");
+        readFile(auth_file, "utf8", (err, file_auth_data) => {
+            if (err) {
+                logging.error("Netatmo auth file error: " + err);
+            } else if (file_auth_data) {
+                if (file_auth_data = JSON.parse(file_auth_data)) {
+                    if (env_auth_data.client_id != file_auth_data.client_id || env_auth_data.client_secret != file_auth_data.client_secret || env_auth_data.refresh_token != file_auth_data.inital_refresh_token) {
+                        logging.info("Environment auth data has been changed")
+                        writeAuthFile()
+                    } else {
+                        logging.info("Use existing auth file")
+                    }
+                } else {
+                    logging.info("Netatmo auth file invalid JSON")
+                    writeAuthFile()
+                }
+            } else {
+                logging.info("Netatmo auth file invalid JSON")
+                writeAuthFile()
+            }
+        })
+    } else {
+        writeAuthFile()
+    }
+}
 
 const reconnect = function() {
     logging.info('connecting')
-    api = new netatmo(auth)
+    api = new netatmo(auth_file)
 }
 
+initalAuth()
 reconnect()
 
 api.on('error', function(error) {
@@ -107,7 +143,7 @@ var getStationsData = function(err, devices) {
         return
     }
 
-    logging.info(devices)
+    logging.debug(devices)
     const station = devices[0]
     const foundModules = station.modules
 
@@ -200,24 +236,38 @@ api.on('get-nextevents', handleEvents)
 api.on('get-lasteventof', handleEvents)
 api.on('get-eventsuntil', handleEvents)
 
-
-
 const processModule = function(module) {
     const name = module.module_name
     const data = module.dashboard_data
+
     logging.info('Looking at module: ' + name)
-    logging.info('   data: ' + JSON.stringify(data))
-    health.healthyEvent()
 
-    const batteryPercent = module.battery_percent
-    if (!_.isNil(batteryPercent)) {
-        const batteryTopic = mqtt_helpers.generateTopic(topicPrefix, name, 'battery')
-        client.smartPublish(batteryTopic, batteryPercent, { retain: true })
+    if (!_.isUndefined(data)) {
+        health.healthyEvent()
+
+        logging.info('   data: ' + JSON.stringify(data))
+        
+        if (!_.isEmpty(module.battery_percent)) {
+            data.battery = module.battery_percent
+        }
+
+        mqttdata = new Object()
+        if (data?.time_utc != undefined) {
+            mqttdata.Time = new Date(data.time_utc * 1000)
+        }
+        mqttdata.SENSOR = data
+
+        logging.info('starting smart publish')
+        if (topic_as_json == "true") {
+            client.smartPublish(mqtt_helpers.generateTopic(topicPrefix, name + '/SENSOR'), JSON.stringify(mqttdata), [], { retain: true })
+        } else {
+            client.smartPublishCollection(mqtt_helpers.generateTopic(topicPrefix, name), mqttdata, [], { retain: true })
+        }
+
+        logging.info('done')
+    } else {
+        logging.error('Data from the module ' + name + ' cannot be retrieved')
     }
-
-    logging.info('starting smart publish')
-    client.smartPublishCollection(mqtt_helpers.generateTopic(topicPrefix, name), data, [], { retain: true })
-    logging.info('done')
 }
 
 const pollData = function() {
@@ -226,22 +276,13 @@ const pollData = function() {
     api.getStationsData(getStationsData)
 }
 
-const refreshToken = function() {
-    logging.info('Refreshing login token')
-    api = new netatmo(auth)
-}
-
 const startMonitoring = function() {
     logging.info('Starting netatmo <-> MQTT')
 
     pollData()
     interval(async() => {
         pollData()
-    }, 30 * 1000)
-
-    interval(async() => {
-        refreshToken()
-    }, 25 * 1000)
+    }, 120 * 1000)
 }
 
 startMonitoring()
