@@ -247,7 +247,7 @@ const processModule = function(module) {
 
         logging.info('   data: ' + JSON.stringify(data))
         
-        if (!_.isEmpty(module.battery_percent)) {
+        if (!_.isUndefined(module.battery_percent)) {
             data.battery = module.battery_percent
         }
 

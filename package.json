@@ -1,6 +1,6 @@
 {
     "name": "mqtt-netatmo-bridge",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "description": "Bridge netatmo to and from MQTT",
     "license": "MIT",
     "main": "mqtt-netatmo-bridge.js",
